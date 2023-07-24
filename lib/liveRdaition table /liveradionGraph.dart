@@ -37,7 +37,7 @@ class _RaditionTableState extends State<RaditionTable> {
   }
 
   void startTimer() {
-    const duration = Duration(seconds: 5);
+    const duration = Duration(seconds: 20);
     _timer = Timer.periodic(duration, (_) {
       _getsData();
     });

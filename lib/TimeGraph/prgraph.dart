@@ -1,11 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:scada_scube/TimeGraph/linenetwork.dart';
 import 'package:scada_scube/home_page/view/inmodel/radiation_model.dart';
+import 'package:scada_scube/live_power/livepowerModel.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-
-import 'models/genartion_graph_model.dart';
-import 'package:intl/intl.dart';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -17,39 +17,149 @@ class ChartsScreen extends StatefulWidget {
 }
 
 class _ChartScreenState extends State<ChartsScreen> {
-  List<Generation> genaration = [];
+  List<Livepower> livepower = [];
   List<LiveRadiation> radiation = [];
   bool loading = true;
   NetworkHelper _networkHelper = NetworkHelper();
+  ChartSeriesController? _chartSeriesController;
+  Timer? timer;
+  int count = 10;
 
+  // Stream<int> _refreshStream = Stream<int>.periodic(
+  //   const Duration(seconds: 5), // Change the duration according to your needs
+  //       (count) => count,
+  // );
   @override
   void initState() {
     super.initState();
     getData();
     setData();
+    timer = Timer.periodic(const Duration(seconds: 5), _updateDataSource);
+    // timer =
+    //     Timer.periodic(const Duration(milliseconds: 1000), _updateDataSource);
+    // timer =
+    //     Timer.periodic(const Duration(milliseconds: 1000), _updateDataSource2);
   }
 
   void getData() async {
     var response = await _networkHelper
-        .get("http://103.149.143.33:8081/api/GenerationGraph");
-    List<Generation> tempdata = generationFromJson(response.body);
+        .get("http://103.149.143.33:8081/api/LiveAcDcPower");
+    List<Livepower> tempdata = livepowerFromJson(response.body);
     setState(() {
-      genaration = tempdata;
+      livepower = tempdata;
       loading = false;
     });
   }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+
+  void _updateDataSource(Timer timer) async {
+    var powerResponse = await _networkHelper.get("http://103.149.143.33:8081/api/LiveAcDcPower");
+    var radiationResponse = await _networkHelper.get("http://103.149.143.33:8081/api/LiveRadiation");
+
+    List<Livepower> powerData = livepowerFromJson(powerResponse.body);
+    List<LiveRadiation> radiationData = liveRadiationFromJson(radiationResponse.body);
+
+    setState(() {
+      final random = math.Random();
+      livepower = powerData; // Update the livepower list with the new data
+      radiation = radiationData; // Update the radiation list with the new data
+
+      livepower.add(Livepower(
+        time: DateTime.now(),
+        liveAcPower: (10.0 + random.nextDouble() * (100.0 - 10.0)),
+        liveDcPower: (10.0 + random.nextDouble() * (100.0 - 10.0)),
+      ));
+
+      radiation.add(LiveRadiation(
+        time: DateTime.now(),
+        east: (random.nextDouble() * 2000),
+        west: (random.nextDouble() * 2000),
+        north: (random.nextDouble() * 2000),
+        south: (random.nextDouble() * 2000),
+        southF: (random.nextDouble() * 2000).toInt(),
+      ));
+
+      if (livepower.length > 20) {
+        livepower.removeAt(0);
+      }
+
+      if (radiation.length > 20) {
+        radiation.removeAt(0);
+      }
+
+      _chartSeriesController?.updateDataSource();
+    });
+  }
+
 
   void setData() async {
     var response = await _networkHelper
         .get("http://103.149.143.33:8081/api/LiveRadiation");
     List<LiveRadiation> tempdatas = liveRadiationFromJson(response.body);
-    if (mounted) {
-      setState(() {
-        radiation = tempdatas;
-        loading = false;
-      });
-    }
+    setState(() {
+      radiation = tempdatas.sublist(tempdatas.length - 14);
+      loading = false;
+    });
   }
+
+  // void setData() async {
+  //   var response = await _networkHelper
+  //       .get("http://103.149.143.33:8081/api/LiveRadiation");
+  //   List<LiveRadiation> tempdatas = liveRadiationFromJson(response.body);
+  //
+  //   if (tempdatas.length > 20) {
+  //     tempdatas = tempdatas.sublist(tempdatas.length - 20);
+  //   }
+  //
+  //   if (mounted) {
+  //     setState(() {
+  //       radiation = tempdatas;
+  //       loading = false;
+  //     });
+  //   }
+  // }
+
+  // void _updateDataSource(Timer timer) {
+  //   setState(() {
+  //     final random = math.Random();
+  //     radiation.add(LiveRadiation(
+  //       time: DateTime.now(),
+  //     ));
+  //     if (radiation.length == 21) {
+  //       radiation.removeAt(0);
+  //       _chartSeriesController?.updateDataSource(
+  //         addedDataIndexes: <int>[radiation.length - 1],
+  //         removedDataIndexes: <int>[0],
+  //       );
+  //     }
+  //     count++;
+  //   });
+  // }
+  //
+  // void _updateDataSource2(Timer timer) {
+  //   setState(() {
+  //     final random = math.Random();
+  //     livepower.add(Livepower(
+  //       time: DateTime.now(),
+  //       liveAcPower: 10.0 + random.nextDouble() * (100.0 - 10.0),
+  //
+  //     ));
+  //     if (livepower.length == 21) {
+  //       livepower.removeAt(0);
+  //       _chartSeriesController?.updateDataSource(
+  //         addedDataIndexes: <int>[livepower.length - 1],
+  //         removedDataIndexes: <int>[0],
+  //       );
+  //     }
+  //     count++;
+  //   });
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -63,132 +173,110 @@ class _ChartScreenState extends State<ChartsScreen> {
               isVisible: true,
               position: LegendPosition.top,
             ),
+            axes: <ChartAxis>[
+              // DateTimeCategoryAxis(
+              //   name: 'xAxi',
+              //   interval: 1,
+              //   dateFormat: DateFormat.d(),
+              //   title: AxisTitle(text: 'Power'),
+              // ),
+              NumericAxis(
+                name: 'yAxi',
+                numberFormat: NumberFormat('#,##0'),
+                minimum: 0,
+                maximum: 1650,
+                title: AxisTitle(text: 'Power'),
+opposedPosition: true,
+              ),
+            ],
             primaryXAxis: DateTimeCategoryAxis(
               dateFormat: DateFormat.d(),
               intervalType: DateTimeIntervalType.days,
               interval: 1,
+              name: 'xAxiss',
+              maximumLabels: 10, // Show only 20 labels on the X-axis
             ),
-            primaryYAxis: NumericAxis(title: AxisTitle(text: 'Genaration')),
-            axes: <ChartAxis>[
-              DateTimeCategoryAxis(
-                  name: 'xAxis',
-                  // opposedPosition: true,
-                  interval: 1,
-                  dateFormat: DateFormat.d(),
-                  title: AxisTitle(text: 'Radiation')),
-              NumericAxis(
-                  name: 'yAxis',
-                  opposedPosition: true,
-                  title: AxisTitle(text: 'Radiation')),
-            ],
+
+            // primaryYAxis: NumericAxis(
+            //     name: 'yAxiss',
+            //     opposedPosition: true,
+            //     minimum: 0,
+            //     maximum: 1650,
+            //     numberFormat: NumberFormat('#,##0'),
+            //
+            //     title: AxisTitle(text: 'Radiation')),
             enableSideBySideSeriesPlacement: false,
             series: <ChartSeries>[
-              // ColumnSeries<Generation, DateTime>(
-              //   dataSource: genaration,
-              //   xValueMapper: (Generation ch, _) => ch.time,
-              //   yValueMapper: (Generation ch, _) => ch.todaysGeneration,
-              //   animationDuration: 1000,
-              //   enableTooltip: true,
-              //   color: Colors.orange,
-              //   name: 'Genaration',
-              //   // opacity: 1,
-              //   // dashArray: const <double>[5, 5],
-              //   // splineType: SplineType.cardinal,
-              //   // cardinalSplineTension: 2.8,
-              //   // dataLabelSettings: const DataLabelSettings(
-              //   //   isVisible: true,
-              //   // ),
-              //   // spacing: 0.3
-              // ),
-              ColumnSeries<LiveRadiation, DateTime>(
+              SplineSeries<Livepower, DateTime>(
+                  dataSource: livepower,
+                  color: Color.fromARGB(255, 126, 184, 253),
+                  opacity: 1,
+                  splineType: SplineType.cardinal,
+                  // cardinalSplineTension: 13.8,
+                  xValueMapper: (Livepower ch, _) => ch.time,
+                  yValueMapper: (Livepower ch, _) => ch.liveAcPower,
+                  name: 'Power',
+                  xAxisName: 'xAxi',
+                  yAxisName: 'yAxi'),
+              SplineSeries<LiveRadiation, DateTime>(
                 dataSource: radiation,
                 xValueMapper: (LiveRadiation ch, _) => ch.time,
                 yValueMapper: (LiveRadiation ch, _) => ch.east,
-                animationDuration: 1000,
-                enableTooltip: true,
                 color: Colors.deepPurple,
                 name: 'Radiation East',
-                width: 0.9,
-                // opacity: 1,
-                // dashArray: const <double>[5, 5],
-                // splineType: SplineType.cardinal,
-                // cardinalSplineTension: 2.8,
-                // dataLabelSettings: const DataLabelSettings(
-                //   isVisible: true,
-                // ),
-                // spacing: 0.3
+                opacity: 1,
+                splineType: SplineType.cardinal,
+                cardinalSplineTension: 13.8,
+                xAxisName: 'xAxiss',
+                yAxisName: 'yAxiss',
               ),
-              ColumnSeries<LiveRadiation, DateTime>(
+              SplineSeries<LiveRadiation, DateTime>(
                 dataSource: radiation,
-                width: 0.8,
                 xValueMapper: (LiveRadiation ch, _) => ch.time,
                 yValueMapper: (LiveRadiation ch, _) => ch.west,
-                animationDuration: 1000,
-                enableTooltip: true,
                 color: Colors.cyan,
                 name: 'Radiation West',
-                // opacity: 1,
-                // dashArray: const <double>[5, 5],
-                // splineType: SplineType.cardinal,
-                // cardinalSplineTension: 2.8,
-                // dataLabelSettings: const DataLabelSettings(
-                //   isVisible: true,
-                // ),
-                // spacing: 0.3
+                opacity: 1,
+                xAxisName: 'xAxiss',
+                yAxisName: 'yAxiss',
+                splineType: SplineType.cardinal,
+                cardinalSplineTension: 13.8,
               ),
-              ColumnSeries<LiveRadiation, DateTime>(
-                width: 0.6,
+              SplineSeries<LiveRadiation, DateTime>(
+                opacity: 1,
+                splineType: SplineType.cardinal,
+                cardinalSplineTension: 13.8,
                 dataSource: radiation,
                 xValueMapper: (LiveRadiation ch, _) => ch.time,
                 yValueMapper: (LiveRadiation ch, _) => ch.north,
-                animationDuration: 1000,
-                enableTooltip: true,
                 color: Colors.amberAccent,
+                xAxisName: 'xAxiss',
+                yAxisName: 'yAxiss',
                 name: 'Radiation North',
-                // opacity: 1,
-                // dashArray: const <double>[5, 5],
-                // splineType: SplineType.cardinal,
-                // cardinalSplineTension: 2.8,
-                // dataLabelSettings: const DataLabelSettings(
-                //   isVisible: true,
-                // ),
-                // spacing: 0.3
               ),
-              ColumnSeries<LiveRadiation, DateTime>(
+              SplineSeries<LiveRadiation, DateTime>(
                 dataSource: radiation,
-                width: 0.4,
                 xValueMapper: (LiveRadiation ch, _) => ch.time,
                 yValueMapper: (LiveRadiation ch, _) => ch.south,
-                animationDuration: 1000,
-                enableTooltip: true,
                 color: Colors.pink,
+                opacity: 1,
+                xAxisName: 'xAxiss',
+                yAxisName: 'yAxiss',
+                splineType: SplineType.cardinal,
+                cardinalSplineTension: 13.8,
                 name: 'Radiation South',
-                // opacity: 1,
-                // dashArray: const <double>[5, 5],
-                // splineType: SplineType.cardinal,
-                // cardinalSplineTension: 2.8,
-                // dataLabelSettings: const DataLabelSettings(
-                //   isVisible: true,
-                // ),
-                // spacing: 0.3
               ),
-              ColumnSeries<LiveRadiation, DateTime>(
+              SplineSeries<LiveRadiation, DateTime>(
                 dataSource: radiation,
-                width: 0.2,
+                opacity: 1,
+                xAxisName: 'xAxiss',
+                yAxisName: 'yAxiss',
+                splineType: SplineType.cardinal,
+                cardinalSplineTension: 13.8,
                 xValueMapper: (LiveRadiation ch, _) => ch.time,
                 yValueMapper: (LiveRadiation ch, _) => ch.southF,
-                animationDuration: 1000,
-                enableTooltip: true,
-                color: Colors.blue,
+                color: Colors.deepOrange,
                 name: 'Radiation South 15°',
-                // opacity: 1,
-                // dashArray: const <double>[5, 5],
-                // splineType: SplineType.cardinal,
-                // cardinalSplineTension: 2.8,
-                // dataLabelSettings: const DataLabelSettings(
-                //   isVisible: true,
-                // ),
-                // spacing: 0.3
               ),
             ],
           ),
@@ -207,28 +295,45 @@ class Charts2 extends StatefulWidget {
 
 class _Charts2State extends State<Charts2> {
   List<Generation> inverter = [];
-
+  ChartSeriesController? _chartSeriesController;
+  Timer? timer;
+  int count = 10;
+  late SelectionBehavior _selectionBehavior;
+  List<Generation> generation = [];
   bool loading = true;
+  late TooltipBehavior _tooltipBehavior;
+
 
   @override
   void initState() {
     super.initState();
+    _tooltipBehavior = TooltipBehavior(enable: true);
+
     getData();
+    _selectionBehavior = SelectionBehavior(
+        // Enables the selection
+        enable: true);
+
   }
+
+
 
   Future<void> getData() async {
     try {
-      var response = await http.get(Uri.parse("http://103.149.143.33:8081/api/GenerationGraph"));
+      var response = await http
+          .get(Uri.parse("http://103.149.143.33:8081/api/GenerationGraph"));
       if (response.statusCode == 200) {
-        List<Generation> tempData = generationFromJson(response.body);
+        List<Generation> allData = generationFromJson(response.body);
+        List<Generation> lastTwoData = allData.sublist(allData.length - 1);
+
         setState(() {
-          if (tempData.length >= 5) {
-            inverter = tempData.sublist(tempData.length - 5); // Take the last 5 values from the API response
-          } else {
-            inverter = tempData; // If there are less than 5 values, use all the values from the API response
-          }
+          inverter =
+              lastTwoData; // Assign the last two data from the API response to the inverter variable
           loading = false;
         });
+
+        print('Last two API data: $lastTwoData');
+        // Use the last two data in your application as needed
       } else {
         // Handle API error
         print('API request failed with status code ${response.statusCode}');
@@ -238,8 +343,6 @@ class _Charts2State extends State<Charts2> {
       print('Error occurred while making API request: $e');
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -254,197 +357,185 @@ class _Charts2State extends State<Charts2> {
             ? Center(child: CircularProgressIndicator())
             : Center(
                 child: SfCartesianChart(
-                  legend: Legend(isVisible: true, position: LegendPosition.top),
-                  primaryYAxis: CategoryAxis(
-                    labelRotation: -45,
-                    title: AxisTitle(text: ' '),
+                  tooltipBehavior: _tooltipBehavior,
+
+                  // legend: Legend(
+                  //   position: LegendPosition.top,
+                  //   isVisible: true,
+                  // ),
+                  selectionType: SelectionType.cluster,
+                  primaryYAxis: NumericAxis(
+                    isVisible: true, // Hide the y-axis line and labels
+                    labelFormat:
+                        '{value}', // Remove any formatting for the y-axis labels
                   ),
                   primaryXAxis: DateTimeAxis(
-                    // minimum: startDate,
-                    // maximum: endDate,
                     dateFormat: DateFormat('hh:mm'),
-                    interval: 1, // Set the interval to 1 hour
+                    isVisible: false, // Set the X-axis to be invisible
+                    interval: 1,
+                    // Set the interval to 1 hour
                   ),
+
                   series: <ChartSeries<Generation, DateTime>>[
                     ColumnSeries<Generation, DateTime>(
+                      enableTooltip: true,
                       name: '6am',
-                      // trackBorderWidth: 2,
-                      // spacing: 0.2,
-                      width: 0.8,
-                      // dataLabelSettings: DataLabelSettings(isVisible: true),
-
-                      dataSource: inverter,
+                      dataLabelSettings:
+                          const DataLabelSettings(isVisible: true),
                       color: Colors.deepPurple,
-
+                      selectionBehavior: _selectionBehavior,
+                      dataSource: inverter,
                       xValueMapper: (Generation data, _) => data.time,
                       yValueMapper: (Generation data, _) => data.h6Am,
                     ),
                     ColumnSeries<Generation, DateTime>(
                       name: '7am',
-                      // trackBorderWidth: 2,
-                      // spacing: 0.2,
-                      // width: 0.8,
-                      // dataLabelSettings: DataLabelSettings(isVisible: true),
+                      enableTooltip: true,
 
+                      dataLabelSettings:
+                          const DataLabelSettings(isVisible: true),
+                      selectionBehavior: _selectionBehavior,
                       dataSource: inverter,
                       color: Colors.deepPurple,
-                      // isTrackVisible: true,
                       xValueMapper: (Generation data, _) => data.time,
                       yValueMapper: (Generation data, _) => data.h7Am,
                     ),
                     ColumnSeries<Generation, DateTime>(
                         name: '8am',
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-                        // trackBorderWidth: 2,
+                        enableTooltip: true,
 
+                        selectionBehavior: _selectionBehavior,
                         dataSource: inverter,
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
-                        color: Colors.deepPurple,
+                        color: Colors.orange,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h8Am),
                     ColumnSeries<Generation, DateTime>(
                         name: '9am',
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-
-
-                        dataSource: inverter,
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
                         color: Colors.deepPurple,
-                        // opacity: 1,
+                        dataSource: inverter,
+                        enableTooltip: true,
+
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
+                        selectionBehavior: _selectionBehavior,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h9Am),
                     ColumnSeries<Generation, DateTime>(
                         name: '10am',
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-                        // trackBorderWidth: 2,
+                        enableTooltip: true,
 
+                        color: Colors.deepOrange,
+                        selectionBehavior: _selectionBehavior,
                         dataSource: inverter,
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
-                        color: Colors.deepPurple,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h10Am),
                     ColumnSeries<Generation, DateTime>(
                         name: '11am',
+                        enableTooltip: true,
+                        dataLabelSettings:
+                        const DataLabelSettings(isVisible: true),
                         dataSource: inverter,
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-                        // animationDuration: 1000,
-                        color: Colors.amber,
+                        color: Colors.blue,
+                        selectionBehavior: _selectionBehavior,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h11Am),
                     ColumnSeries<Generation, DateTime>(
                         name: '12pm',
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-                        // trackBorderWidth: 2,
-                        dataSource: inverter,
-                        animationDuration: 1000,
                         enableTooltip: true,
-                        color: Colors.red,
+
+                        color: Colors.deepPurple,
+                        opacity: 1,
+                        selectionBehavior: _selectionBehavior,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
+                        dataSource: inverter,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h12Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '1pm',
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
+                        enableTooltip: true,
 
+                        color: Colors.purpleAccent,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         dataSource: inverter,
-                        // isTrackVisible: true,
-                        // animationDuration: 1000,
-                        color: Colors.lightBlueAccent,
+                        selectionBehavior: _selectionBehavior,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h1Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '2pm',
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
+                        enableTooltip: true,
 
+                        color: Colors.green,
+                        selectionBehavior: _selectionBehavior,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         dataSource: inverter,
-
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
-                        color: Colors.yellow,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h2Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '3pm',
-                        dataSource: inverter,
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        width: 1,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-                        // animationDuration: 1000,
+                        enableTooltip: true,
 
-                        color: Colors.cyan,
+                        dataSource: inverter,
+                        selectionBehavior: _selectionBehavior,
+                        color: Colors.deepPurple,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h3Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '4pm',
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        width: 1,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
+                        enableTooltip: true,
 
-
+                        selectionBehavior: _selectionBehavior,
+                        color: Colors.blue,
+                        opacity: 1,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         dataSource: inverter,
-                        animationDuration: 1000,
+
                         // enableTooltip: true,
-                        color: Colors.deepOrangeAccent,
+
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h4Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '5pm',
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
-
+                        enableTooltip: true,
 
                         dataSource: inverter,
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
-                        color: Colors.green,
+                        color: Colors.deepPurple,
+                        selectionBehavior: _selectionBehavior,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h5Pm),
                     ColumnSeries<Generation, DateTime>(
                         name: '6pm',
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
+                        enableTooltip: true,
 
-
+                        color: Colors.lime,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         dataSource: inverter,
-                        // animationDuration: 1000,
-                        // enableTooltip: true,
-                        color: Colors.pink,
+                        selectionBehavior: _selectionBehavior,
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h6Pm),
                     ColumnSeries<Generation, DateTime>(
                         dataSource: inverter,
-                        // trackBorderWidth: 2,
-                        // spacing: 0.2,
-                        // width: 0.8,
-                        // dataLabelSettings: DataLabelSettings(isVisible: true),
+                        enableTooltip: true,
 
+                        selectionBehavior: _selectionBehavior,
                         color: Colors.deepPurple,
-
+                        name: '7pm',
+                        // splineType: SplineType.cardinal,
+                        // cardinalSplineTension: 13.8,
+                        dataLabelSettings:
+                            const DataLabelSettings(isVisible: true),
                         xValueMapper: (Generation data, _) => data.time,
                         yValueMapper: (Generation data, _) => data.h7Pm),
                   ],
@@ -517,10 +608,6 @@ List<Generation> generationFromJson(String jsonString) {
       .toList();
 }
 
-
-
-
-
 class Charts3 extends StatefulWidget {
   const Charts3({Key? key}) : super(key: key);
 
@@ -541,14 +628,17 @@ class _Charts3State extends State<Charts3> {
 
   Future<void> getData() async {
     try {
-      var response = await http.get(Uri.parse("http://103.149.143.33:8081/api/GenerationGraph"));
+      var response = await http
+          .get(Uri.parse("http://103.149.143.33:8081/api/GenerationGraph"));
       if (response.statusCode == 200) {
         List<Generation> tempData = generationFromJson(response.body);
         setState(() {
           if (tempData.length >= 5) {
-            inverter = tempData.sublist(tempData.length - 5); // Take the last 5 values from the API response
+            inverter = tempData.sublist(tempData.length -
+                5); // Take the last 5 values from the API response
           } else {
-            inverter = tempData; // If there are less than 5 values, use all the values from the API response
+            inverter =
+                tempData; // If there are less than 5 values, use all the values from the API response
           }
           loading = false;
         });
@@ -562,8 +652,6 @@ class _Charts3State extends State<Charts3> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     // DateTime now = DateTime.now();
@@ -576,37 +664,36 @@ class _Charts3State extends State<Charts3> {
         body: loading
             ? Center(child: CircularProgressIndicator())
             : Center(
-          child: SfCartesianChart(
-            legend: Legend(isVisible: true, position: LegendPosition.top),
-            primaryYAxis: CategoryAxis(
-              labelRotation: -45,
-              title: AxisTitle(text: ' '),
-            ),
-            primaryXAxis: DateTimeAxis(
-              // minimum: startDate,
-              // maximum: endDate,
-              dateFormat: DateFormat('hh:mm'),
-              interval: 1, // Set the interval to 1 hour
-            ),
-            series: <ChartSeries<Generation, DateTime>>[
-             ColumnSeries<Generation, DateTime>(
-                name: 'Todays Generation',
-                // trackBorderWidth: 2,
-                // spacing: 0.2,
+                child: SfCartesianChart(
+                  legend: Legend(isVisible: true, position: LegendPosition.top),
+                  primaryYAxis: CategoryAxis(
+                    labelRotation: -45,
+                    title: AxisTitle(text: ' '),
+                  ),
+                  primaryXAxis: DateTimeAxis(
+                    // minimum: startDate,
+                    // maximum: endDate,
+                    dateFormat: DateFormat('hh:mm'),
+                    interval: 1, // Set the interval to 1 hour
+                  ),
+                  series: <ChartSeries<Generation, DateTime>>[
+                    ColumnSeries<Generation, DateTime>(
+                      name: 'Todays Generation',
+                      // trackBorderWidth: 2,
+                      // spacing: 0.2,
 
+                      // dataLabelSettings: DataLabelSettings(isVisible: true),
 
-                // dataLabelSettings: DataLabelSettings(isVisible: true),
+                      dataSource: inverter,
+                      color: Colors.deepPurple,
 
-                dataSource: inverter,
-                color: Colors.deepPurple,
-
-                xValueMapper: (Generation data, _) => data.time,
-                yValueMapper: (Generation data, _) => data.todaysGeneration,
+                      xValueMapper: (Generation data, _) => data.time,
+                      yValueMapper: (Generation data, _) =>
+                          data.todaysGeneration,
+                    ),
+                  ],
+                ),
               ),
-
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -1,50 +1,59 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
 class GaugeScreen extends StatefulWidget {
   @override
   _GaugeScreenState createState() => _GaugeScreenState();
 }
 
 class _GaugeScreenState extends State<GaugeScreen> {
-  double _gaugeValue = 0; // Change the type to double
+  double _gaugeValue = 0;
   late Timer _timer;
+  late bool _isTimerActive;
 
   @override
   void initState() {
     super.initState();
-    fetchData();
+    _isTimerActive = true;
     startTimer();
   }
 
   @override
   void dispose() {
     _timer.cancel();
+    _isTimerActive = false;
     super.dispose();
   }
 
   void startTimer() {
-    const duration = Duration(seconds: 5);
+    const duration = Duration(seconds: 2);
     _timer = Timer.periodic(duration, (_) {
-      fetchData();
+      if (_isTimerActive) {
+        fetchData();
+      }
     });
   }
 
   void fetchData() async {
-    final response =
-    await http.get(Uri.parse('http://103.149.143.33:8081/api/LiveAcDcPower'));
-    final data = jsonDecode(response.body);
+    try {
+      final response = await http.get(Uri.parse('http://103.149.143.33:8081/api/LiveAcDcPower'));
+      final List<dynamic> dataList = jsonDecode(response.body);
 
-    if (data.isNotEmpty) {
-      setState(() {
-        _gaugeValue = data.last['liveAcPower'].toDouble();
-      });
+      if (dataList.isNotEmpty) {
+        final double newValue = dataList.last['liveAcPower'].toDouble();
+        if (_gaugeValue != newValue) {
+          setState(() {
+            _gaugeValue = newValue;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching data: $e');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +67,7 @@ class _GaugeScreenState extends State<GaugeScreen> {
           child: SfRadialGauge(
             title: const GaugeTitle(text: "Live Power"),
             enableLoadingAnimation: true,
-            animationDuration: 4500,
+            animationDuration: 1000,
             axes: <RadialAxis>[
               RadialAxis(
                 minimum: 0,
@@ -89,7 +98,7 @@ class _GaugeScreenState extends State<GaugeScreen> {
                 annotations: <GaugeAnnotation>[
                   GaugeAnnotation(
                     widget: Text(
-                      '$_gaugeValue kW '.toString(),
+                      '${_gaugeValue.toStringAsFixed(2)} kW', // Limit decimal points
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,

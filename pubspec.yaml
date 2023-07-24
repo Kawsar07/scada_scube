@@ -1,5 +1,5 @@
 name: scada_scube
-description: A new Flutter project.
+description: scada scube project.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -49,24 +49,15 @@ dependencies:
   url_launcher: ^6.1.11
   printing: ^5.11.0
   responsive_builder: ^0.7.0
+  flutter_animation_progress_bar: ^2.3.1
+  pull_to_refresh: ^2.0.0
+  shared_preferences: ^2.2.0
+  flutter_launcher_icons: "^0.13.1"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/image/img.png"
 
 
 

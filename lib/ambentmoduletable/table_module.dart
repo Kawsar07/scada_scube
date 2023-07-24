@@ -18,7 +18,8 @@ class _ModuleTableState extends State<ModuleTable> {
   int itemCount = 2;
   List<ModuleTemperature> _userModel = [];
   late Timer _timer;
-
+  bool _isAscending = true;
+  String _sortColumnName = 'Date Time';
   @override
   void initState() {
     super.initState();
@@ -33,7 +34,7 @@ class _ModuleTableState extends State<ModuleTable> {
   }
 
   void startTimer() {
-    const refreshInterval = Duration(seconds: 10); // Set the refresh interval
+    const refreshInterval = Duration(seconds: 2); // Set the refresh interval
     _timer = Timer.periodic(refreshInterval, (_) {
       _getData(); // Fetch data periodically
     });
@@ -48,11 +49,15 @@ class _ModuleTableState extends State<ModuleTable> {
           .toList();
       setState(() {
         _userModel = productList;
+        _sortData(); // Sort the data after getting it
       });
     } catch (e) {
       // Handle error or show error message
     }
   }
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +153,29 @@ class _ModuleTableState extends State<ModuleTable> {
       ),
     ];
   }
+
+
+  void _sortData() {
+    setState(() {
+      // Sort the data grid rows based on the selected column and sorting order
+      _userModel.sort((a, b) {
+        if (_sortColumnName == 'Date Time') {
+          int comparison = a.time.compareTo(b.time);
+          return _isAscending ? comparison : -comparison;
+        } else if (_sortColumnName == 'ModuleTemperature') {
+          double valueA = a.moduleTemperature;
+          double valueB = b.moduleTemperature;
+          int comparison = valueA.compareTo(valueB);
+          return _isAscending ? comparison : -comparison;
+        } else {
+          // Handle sorting for other columns if needed
+          return 0;
+        }
+      });
+    });
+  }
+
+
 
   Future<List<ModuleTemperature>> generateProductList() async {
     return _userModel;

@@ -14,7 +14,7 @@ class TempGraphScreen extends StatefulWidget {
 }
 
 class _TempGraphScreenState extends State<TempGraphScreen> {
-  List<ModuleTemperature> module = [];
+  List<ModuleTemperature1> module = [];
   late TooltipBehavior _tooltipBehavior;
   bool loading = true;
   NetworkHelper _networkHelper = NetworkHelper();
@@ -35,7 +35,7 @@ class _TempGraphScreenState extends State<TempGraphScreen> {
   }
 
   void startTimer() {
-    const refreshInterval = Duration(seconds: 10); // Set the refresh interval
+    const refreshInterval = Duration(seconds: 5); // Set the refresh interval
     _timer = Timer.periodic(refreshInterval, (_) {
       _setData(); // Fetch new data periodically
     });
@@ -44,7 +44,7 @@ class _TempGraphScreenState extends State<TempGraphScreen> {
   Future<void> _setData() async {
     try {
       var response = await _networkHelper.get("http://103.149.143.33:8081/api/TemperatureData");
-      List<ModuleTemperature> tempData = moduleTemperatureFromJson(response.body);
+      List<ModuleTemperature1> tempData = moduleTemperature1FromJson(response.body);
       setState(() {
         module = tempData;
         loading = false;
@@ -92,13 +92,13 @@ class _TempGraphScreenState extends State<TempGraphScreen> {
                     majorTickLines: const MajorTickLines(size: 0),
                   ),
                   series: <ChartSeries>[
-                    SplineAreaSeries<ModuleTemperature, DateTime>(
+                    SplineAreaSeries<ModuleTemperature1, DateTime>(
                       borderWidth: 3,
                       borderColor: Colors.orange,
                       dataSource: module.length > 30 ? module.sublist(module.length - 30) : module,
-                      xValueMapper: (ModuleTemperature ch, _) => ch.time,
-                      yValueMapper: (ModuleTemperature ch, _) => ch.moduleTemperature,
-                      markerSettings: const MarkerSettings(isVisible: true),
+                      xValueMapper: (ModuleTemperature1 ch, _) => ch.time,
+                      yValueMapper: (ModuleTemperature1 ch, _) => ch.moduleTemperature,
+                      // markerSettings: const MarkerSettings(isVisible: true),
                       name: 'Module Temperature',
                       animationDuration: 1000,
                       enableTooltip: true,

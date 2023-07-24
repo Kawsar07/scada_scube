@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:scada_scube/live_power/livepowernetwork.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
@@ -10,41 +9,87 @@ import 'package:syncfusion_flutter_core/theme.dart';
 import 'livepowerModel.dart';
 import 'livepowergraph.dart';
 
-class liveTable extends StatefulWidget {
-  liveTable({Key? key}) : super(key: key);
+class ApipowerLive {
+  Future<List<Livepower>> getTotalCustomerStatus(int pageNumber, int pageSize) async {
+    final int skip = pageNumber * pageSize;
+    final int take = pageSize;
+    var response = await http.get(Uri.parse('http://103.149.143.33:8081/api/LiveAcDcPower?skip=$skip&take=$take'));
 
-  @override
-  _liveTableState createState() => _liveTableState();
+    if (response.statusCode == 200) {
+      var decodedProducts = json.decode(response.body).cast<Map<String, dynamic>>();
+      List<Livepower> productList = decodedProducts.map<Livepower>((json) => Livepower.fromJson(json)).toList();
+      return productList;
+    } else {
+      throw Exception('Failed to fetch data from the API');
+    }
+  }
 }
 
-class _liveTableState extends State<liveTable> {
-  int itemCount = 2;
-  late List<Livepower>? _userModel = [];
-  late Timer _timer;
+class LiveTable extends StatefulWidget {
+  LiveTable({Key? key}) : super(key: key);
+
+  @override
+  _LiveTableState createState() => _LiveTableState();
+}
+
+class _LiveTableState extends State<LiveTable> {
+  int pageNumber = 0;
+  int pageSize = 20;
+  late List<Livepower> _userModel = [];
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _getsData();
-    startTimer();
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
+  Future<void> _loadData() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      var newData = await ApipowerLive().getTotalCustomerStatus(pageNumber, pageSize);
+
+      setState(() {
+        _userModel.addAll(newData);
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      // Handle the error here, e.g., show a toast message or a snackbar
+      print('Error fetching data: $e');
+    }
   }
 
-  void startTimer() {
-    const duration = Duration(seconds: 5);
-    _timer = Timer.periodic(duration, (_) {
-      _getsData();
+  Future<void> _loadMoreData() async {
+    if (isLoading) {
+      return;
+    }
+
+    setState(() {
+      pageNumber++;
+      isLoading = true;
     });
-  }
 
-  void _getsData() async {
-    _userModel = await ApipowerLive().getTotalCustomerStatus();
-    setState(() {});
+    try {
+      var newData = await ApipowerLive().getTotalCustomerStatus(pageNumber, pageSize);
+
+      setState(() {
+        _userModel.addAll(newData);
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        pageNumber--;
+        isLoading = false;
+      });
+      // Handle the error here, e.g., show a toast message or a snackbar
+      print('Error fetching data: $e');
+    }
   }
 
   @override
@@ -75,59 +120,55 @@ class _liveTableState extends State<liveTable> {
               ),
               SizedBox(
                 height: 700,
-                child: FutureBuilder(
-                  future: getProductDataSource(),
-                  builder: (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
-                    return snapshot.hasData
-                        ? RefreshIndicator(
-                      displacement: 250,
-                      backgroundColor: Colors.white,
-                      color: Colors.black,
-                      strokeWidth: 3,
-                      triggerMode: RefreshIndicatorTriggerMode.onEdge,
-                      onRefresh: () async {
-                        await Future.delayed(const Duration(milliseconds: 1500));
-                        setState(() {
-                          itemCount = itemCount + 1;
-                        });
-                      },
-                      child: SfDataGridTheme(
-                        data: SfDataGridThemeData(
-                          headerColor: Colors.deepPurple,
-                          frozenPaneElevation: 0.0,
-                          frozenPaneLineColor: Colors.white,
-                          frozenPaneLineWidth: 1.5,
-                        ),
-                        child: SfDataGrid(
-                          onQueryRowHeight: (details) {
-                            return details.rowIndex == 0 ? 35.0 : 30.0;
-                          },
-                          source: snapshot.data,
-                          frozenColumnsCount: 2,
-                          columnWidthCalculationRange: ColumnWidthCalculationRange.allRows,
-                          columnWidthMode: ColumnWidthMode.auto,
-                          columns: getColumns(),
-                        ),
-                      ),
-                    )
-                        : const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                      ),
-                    );
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification scrollInfo) {
+                    if (!isLoading && scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+                      _loadMoreData();
+                      return true;
+                    }
+                    return false;
                   },
+                  child: RefreshIndicator(
+                    displacement: 250,
+                    backgroundColor: Colors.white,
+                    color: Colors.black,
+                    strokeWidth: 3,
+                    triggerMode: RefreshIndicatorTriggerMode.onEdge,
+                    onRefresh: () async {
+                      await Future.delayed(const Duration(milliseconds: 1500));
+                      setState(() {
+                        pageNumber = 0;
+                        _userModel.clear();
+                      });
+                      await _loadData();
+                    },
+                    child: SfDataGridTheme(
+                      data: SfDataGridThemeData(
+                        headerColor: Colors.deepPurple,
+                        frozenPaneElevation: 0.0,
+                        frozenPaneLineColor: Colors.white,
+                        frozenPaneLineWidth: 1.5,
+                      ),
+                      child: SfDataGrid(
+                        onQueryRowHeight: (details) {
+                          return details.rowIndex == 0 ? 35.0 : 30.0;
+                        },
+                        source: ProductDataGridSource(_userModel),
+                        frozenColumnsCount: 2,
+                        columnWidthCalculationRange: ColumnWidthCalculationRange.allRows,
+                        columnWidthMode: ColumnWidthMode.auto,
+                        columns: getColumns(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
+              if (isLoading) CircularProgressIndicator(strokeWidth: 3),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Future<ProductDataGridSource> getProductDataSource() async {
-    var productList = await generateProductList();
-    return ProductDataGridSource(productList);
   }
 
   List<GridColumn> getColumns() {
@@ -169,13 +210,6 @@ class _liveTableState extends State<liveTable> {
       ),
     ];
   }
-
-  Future<List<Livepower>> generateProductList() async {
-    var response = await http.get(Uri.parse('http://103.149.143.33:8081/api/LiveAcDcPower'));
-    var decodedProducts = json.decode(response.body).cast<Map<String, dynamic>>();
-    List<Livepower> productList = decodedProducts.map<Livepower>((json) => Livepower.fromJson(json)).toList();
-    return productList;
-  }
 }
 
 class ProductDataGridSource extends DataGridSource {
@@ -209,7 +243,6 @@ class ProductDataGridSource extends DataGridSource {
       ],
     );
   }
-
 
   @override
   List<DataGridRow> get rows => dataGridRows;

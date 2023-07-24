@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:scada_scube/analysis/analysis_home.dart';
 import 'package:scada_scube/home_page/Home_dash.dart';
+import 'package:scada_scube/main.dart';
+import '../admin/profile_page.dart';
 import '../ambentmoduletable/Module_home_screen.dart';
+import '../analysis/home_analysis.dart';
 import '../cumulative/CumuHomeViews.dart';
 import '../shedgraph/shed_Genration_graph/genaration_graph_home.dart';
 import '../shedgraph/shed_today_energy/today_energy_home.dart';
 import '../shedgraph/shed_yesters_energy/yester_energy_home.dart';
-
 import 'newpage_home.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  final String token;
+
+  const HomePage({Key? key, required this.token}) : super(key: key);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -20,14 +25,16 @@ class _HomePageState extends State<HomePage> {
   bool isFlipped = false;
 
   bool value1 = true;
-  final screen = [
-    const HomeDashBroad(),
-    const NewPAge(),
-    const NewPAge(),
-    // const AnimateApp(),
-    const NewPAge(),
-    const NewPAge(),
-  ];
+
+  List<Widget> get screen {
+    return [
+      HomeDashBroad(token: widget.token),
+      TabBarApp(token: widget.token),
+       // FilterApp(token: widget.token),
+      AnalysisHome(token: widget.token),
+      ProfilePage(token: widget.token),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,26 +105,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => MyWidgets()));
-                  },
-                  child: const ListTile(
-                    leading: Icon(
-                      Icons.safety_check_sharp,
-                      size: 25.0,
-                      color: Colors.white,
-                    ),
-                    title: Text(
-                      'Cumulative',
-                      style: TextStyle(
-                        fontSize: 15.0,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+
                 InkWell(
                   onTap: () {},
                   child: ExpansionTile(
@@ -240,7 +228,7 @@ class _HomePageState extends State<HomePage> {
           unselectedFontSize: 12,
           unselectedItemColor: Colors.grey,
           backgroundColor: Colors.white,
-          selectedItemColor: Colors.red,
+          selectedItemColor: Color(0xFF90C126),
           selectedFontSize: 15,
           currentIndex: currentIndex,
           onTap: (index) => setState(
@@ -260,8 +248,9 @@ class _HomePageState extends State<HomePage> {
               label: 'Analysis',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'Setting',
+              icon: Icon(Icons.person),
+              label: 'Profile',
+
             ),
           ],
         ),
